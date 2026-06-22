@@ -1,48 +1,59 @@
 {
-  "name": "node-express-boilerplate",
-  "version": "1.0.0",
-  "description": "Node.js, TypeScript, Express, Prisma, and SQL Server boilerplate.",
-  "main": "dist/src/server.js",
-  "scripts": {
-    "dev": "tsx watch src/server.ts",
-    "build": "tsc",
-    "start": "node dist/src/server.js",
-    "typecheck": "tsc --noEmit",
-    "db:init": "bash scripts/create-database.sh",
-    "db:setup": "npm run db:up && npm run db:init && npm run prisma:migrate -- --name init"
-  },
-  "keywords": [
-    "node",
-    "typescript",
-    "express",
-    "prisma",
-    "postgres"
-  ],
-  "author": "",
-  "license": "MIT",
-  "dependencies": {
-    "@prisma/adapter-pg": "^7.8.0",
-    "@prisma/client": "^6.19.3",
-    "bcryptjs": "^3.0.3",
-    "cors": "^2.8.5",
-    "dotenv": "^16.5.0",
-    "express": "^5.1.0",
-    "helmet": "^8.1.0",
-    "jsonwebtoken": "^9.0.3",
-    "morgan": "^1.10.0",
-    "pg": "^8.22.0"
-  },
-  "devDependencies": {
-    "@types/bcryptjs": "^2.4.6",
-    "@types/cors": "^2.8.18",
-    "@types/express": "^5.0.2",
-    "@types/jsonwebtoken": "^9.0.10",
-    "@types/morgan": "^1.9.9",
-    "@types/mssql": "^9.1.8",
-    "@types/node": "^22.19.19",
-    "@types/pg": "^8.20.0",
-    "prisma": "^6.19.3",
-    "tsx": "^4.22.4",
-    "typescript": "^5.9.3"
-  }
+	"name": "node-express-boilerplate",
+	"version": "1.0.0",
+	"description": "Node.js, TypeScript, Express, Prisma, and SQL Server boilerplate.",
+	"main": "dist/src/server.js",
+	"scripts": {
+		"dev": "tsx watch src/server.ts",
+		"build": "tsc",
+		"start": "node dist/src/server.js",
+		"typecheck": "tsc --noEmit",
+		"lint": "eslint .",
+		"lint:fix": "eslint . --fix",
+		"format": "prettier --write . && eslint . --fix",
+		"format:check": "prettier --check .",
+		"db:init": "bash scripts/create-database.sh",
+		"db:setup": "npm run db:up && npm run db:init && npm run prisma:migrate -- --name init"
+	},
+	"keywords": [
+		"node",
+		"typescript",
+		"express",
+		"prisma",
+		"postgres"
+	],
+	"author": "",
+	"license": "MIT",
+	"dependencies": {
+		"@prisma/adapter-pg": "^7.8.0",
+		"@prisma/client": "^6.19.3",
+		"bcryptjs": "^3.0.3",
+		"cors": "^2.8.5",
+		"dotenv": "^16.5.0",
+		"express": "^5.1.0",
+		"helmet": "^8.1.0",
+		"jsonwebtoken": "^9.0.3",
+		"morgan": "^1.10.0",
+		"pg": "^8.22.0"
+	},
+	"devDependencies": {
+		"@eslint/js": "^10.0.1",
+		"@types/bcryptjs": "^2.4.6",
+		"@types/cors": "^2.8.18",
+		"@types/express": "^5.0.2",
+		"@types/jsonwebtoken": "^9.0.10",
+		"@types/morgan": "^1.9.9",
+		"@types/mssql": "^9.1.8",
+		"@types/node": "^22.19.19",
+		"@types/pg": "^8.20.0",
+		"eslint": "^10.5.0",
+		"eslint-config-prettier": "^10.1.8",
+		"eslint-plugin-simple-import-sort": "^13.0.0",
+		"globals": "^17.7.0",
+		"prettier": "^3.8.4",
+		"prisma": "^6.19.3",
+		"tsx": "^4.22.4",
+		"typescript": "^5.9.3",
+		"typescript-eslint": "^8.62.0"
+	}
 }

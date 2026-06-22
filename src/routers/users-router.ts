@@ -1,119 +1,178 @@
-import express from "express";
-import { Role } from "../../generated/prisma/client.js";
-import { HttpError } from "../errors/http-error.js";
-import { login } from "../lib/auth/login.js";
-import { logout } from "../lib/auth/logout.js";
-import { hashPassword } from "../lib/auth/password.js";
+import express from 'express'
+
+import { Role } from '../../generated/prisma/client'
+import { HttpError } from '../errors/http-error'
+import { login } from '../lib/auth/login'
+import { logout } from '../lib/auth/logout'
+import { hashPassword } from '../lib/auth/password'
+import { authenticate, authorize } from '../middleware/auth-middleware'
 import {
-  createUser,
-  getUserByEmail,
-  getUserById,
-  getUsers,
-  toPublicUser,
-} from "../models/users/user-queries.js";
-import { authenticate, authorize } from "../middleware/auth-middleware.js";
+	createUser,
+	getUserByEmail,
+	getUserById,
+	getUsers,
+	toPublicUser,
+} from '../models/users/user-queries'
 
-export const usersRouter = express.Router();
+export const usersRouter = express.Router()
 
-usersRouter.post("/register", async (req, res, next) => {
-  try {
-    const { email, password } = req.body as { email?: string; password?: string };
+usersRouter.post('/register', async (req, res, next) => 
+{
+	try 
+{
+		const { email, password } = req.body as {
+			email?: string
+			password?: string
+		}
 
-    if (!email || !password) {
-      throw new HttpError("Email and password are required", 400, "VALIDATION_ERROR");
-    }
+		if (!email || !password) 
+{
+			throw new HttpError(
+				'Email and password are required',
+				400,
+				'VALIDATION_ERROR',
+			)
+		}
 
-    if (password.length < 8) {
-      throw new HttpError("Password must be at least 8 characters", 400, "VALIDATION_ERROR");
-    }
+		if (password.length < 8) 
+{
+			throw new HttpError(
+				'Password must be at least 8 characters',
+				400,
+				'VALIDATION_ERROR',
+			)
+		}
 
-    const existingUser = await getUserByEmail(email);
+		const existingUser = await getUserByEmail(email)
 
-    if (existingUser) {
-      throw new HttpError("Email already in use", 409, "EMAIL_IN_USE");
-    }
+		if (existingUser) 
+{
+			throw new HttpError('Email already in use', 409, 'EMAIL_IN_USE')
+		}
 
-    const hashedPassword = await hashPassword(password);
-    await createUser({ email, password: hashedPassword });
-    const auth = await login(email, password);
+		const hashedPassword = await hashPassword(password)
+		await createUser({ email, password: hashedPassword })
 
-    res.status(201).json(auth);
-  } catch (error) {
-    next(error);
-  }
-});
+		const auth = await login(email, password)
 
-usersRouter.post("/login", async (req, res, next) => {
-  try {
-    const { email, password } = req.body as { email?: string; password?: string };
+		res.status(201).json(auth)
+	}
+ catch (error) 
+{
+		next(error)
+	}
+})
 
-    if (!email || !password) {
-      throw new HttpError("Email and password are required", 400, "VALIDATION_ERROR");
-    }
+usersRouter.post('/login', async (req, res, next) => 
+{
+	try 
+{
+		const { email, password } = req.body as {
+			email?: string
+			password?: string
+		}
 
-    const result = await login(email, password);
+		if (!email || !password) 
+{
+			throw new HttpError(
+				'Email and password are required',
+				400,
+				'VALIDATION_ERROR',
+			)
+		}
 
-    res.json(result);
-  } catch (error) {
-    next(error);
-  }
-});
+		const result = await login(email, password)
 
-usersRouter.post("/logout", authenticate, async (req, res, next) => {
-  try {
-    const authHeader = req.headers.authorization!;
-    const token = authHeader.slice("Bearer ".length);
+		res.json(result)
+	}
+ catch (error) 
+{
+		next(error)
+	}
+})
 
-    await logout(token);
+usersRouter.post('/logout', authenticate, async (req, res, next) => 
+{
+	try 
+{
+		const authHeader = req.headers.authorization!
 
-    res.json({ message: "Logged out successfully" });
-  } catch (error) {
-    next(error);
-  }
-});
+		const token = authHeader.slice('Bearer '.length)
 
-usersRouter.get("/me", authenticate, async (req, res, next) => {
-  try {
-    const user = await getUserById(req.user!.id);
+		await logout(token)
 
-    if (!user) {
-      throw new HttpError("User not found", 404, "NOT_FOUND");
-    }
+		res.json({ message: 'Logged out successfully' })
+	}
+ catch (error) 
+{
+		next(error)
+	}
+})
 
-    res.json({ user: toPublicUser(user) });
-  } catch (error) {
-    next(error);
-  }
-});
+usersRouter.get('/me', authenticate, async (req, res, next) => 
+{
+	try 
+{
+		const user = await getUserById(req.user!.id)
 
-usersRouter.get("/", authenticate, authorize(Role.ADMIN), async (_req, res, next) => {
-  try {
-    const users = await getUsers();
+		if (!user) 
+{
+			throw new HttpError('User not found', 404, 'NOT_FOUND')
+		}
 
-    res.json({ users: users.map(toPublicUser) });
-  } catch (error) {
-    next(error);
-  }
-});
+		res.json({ user: toPublicUser(user) })
+	}
+ catch (error) 
+{
+		next(error)
+	}
+})
 
-usersRouter.get("/:id", authenticate, async (req, res, next) => {
-  try {
-    const id = req.params.id as string;
-    const isAdmin = req.user!.role === Role.ADMIN;
-    const isSelf = req.user!.id === id;
+usersRouter.get(
+	'/',
+	authenticate,
+	authorize(Role.ADMIN),
+	async (_req, res, next) => 
+{
+		try 
+{
+			const users = await getUsers()
 
-    if (!isAdmin && !isSelf) {
-      throw new HttpError("Insufficient permissions", 403, "FORBIDDEN");
-    }
+			res.json({ users: users.map(toPublicUser) })
+		}
+ catch (error) 
+{
+			next(error)
+		}
+	},
+)
 
-    const user = await getUserById(id);
+usersRouter.get('/:id', authenticate, async (req, res, next) => 
+{
+	try 
+{
+		const id = req.params.id as string
 
-    if (!user) {
-      throw new HttpError("User not found", 404, "NOT_FOUND");
-    }
+		const isAdmin = req.user!.role === Role.ADMIN
 
-    res.json({ user: toPublicUser(user) });
-  } catch (error) {
-    next(error);
-  }
-});
+		const isSelf = req.user!.id === id
+
+		if (!isAdmin && !isSelf) 
+{
+			throw new HttpError('Insufficient permissions', 403, 'FORBIDDEN')
+		}
+
+		const user = await getUserById(id)
+
+		if (!user) 
+{
+			throw new HttpError('User not found', 404, 'NOT_FOUND')
+		}
+
+		res.json({ user: toPublicUser(user) })
+	}
+ catch (error) 
+{
+		next(error)
+	}
+})

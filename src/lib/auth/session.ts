@@ -1,20 +1,27 @@
-import { prisma } from "../prisma.js";
+import { prisma } from '../prisma'
 
-export const createSession = async (userId: string, jti: string, expiresAt: Date) => {
-  return prisma.session.create({
-    data: { userId, jti, expiresAt },
-  });
-};
+export const createSession = async (
+	userId: string,
+	jti: string,
+	expiresAt: Date,
+) => 
+{
+	return prisma.session.create({
+		data: { userId, jti, expiresAt },
+	})
+}
 
-export const getActiveSession = async (jti: string) => {
-  return prisma.session.findFirst({
-    where: {
-      jti,
-      expiresAt: { gt: new Date() },
-    },
-  });
-};
+export const getActiveSession = async (jti: string) => 
+{
+	return prisma.session.findFirst({
+		where: {
+			jti,
+			expiresAt: { gt: new Date() },
+		},
+	})
+}
 
-export const revokeSession = async (jti: string) => {
-  return prisma.session.deleteMany({ where: { jti } });
-};
+export const revokeSession = async (jti: string) => 
+{
+	return prisma.session.deleteMany({ where: { jti } })
+}
