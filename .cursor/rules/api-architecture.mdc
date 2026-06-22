@@ -1,0 +1,32 @@
+---
+description: Express API routing and layer conventions
+alwaysApply: true
+---
+
+# API Architecture
+
+## Router mounting
+
+- `app.ts` sets up global middleware, health check, and error handling only.
+- `server.ts` is the router filter: mount all domain routers here (e.g. `app.use("/users", usersRouter)`).
+- Do not mount domain routers in `app.ts`.
+
+## Route organization
+
+- Keep all routes for a domain in its router file (e.g. auth + CRUD routes live in `users-router.ts`).
+- Routers should stay thin: validate input, call model/lib functions, return responses.
+
+## Data access
+
+- Database queries live in `src/models/<domain>/<domain>-queries.ts` (reads/writes for that model).
+- Example: `src/models/users/user-queries.ts` for `createUser`, `getUsers`, `getUserById`.
+
+## Auth logic
+
+- Auth utilities live in `src/lib/auth/`:
+  - `password.ts` — hash and compare passwords
+  - `jwt.ts` — sign and verify tokens
+  - `login.ts` — login flow (returns token)
+  - `logout.ts` — revoke token/session
+  - `session.ts` — session persistence helpers
+- Middleware in `src/middleware/` handles request-level auth checks only.

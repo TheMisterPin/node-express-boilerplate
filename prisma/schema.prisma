@@ -9,30 +9,32 @@ generator client {
 }
 
 datasource db {
-  url = env("DATABASE_URL")
-  provider = "sqlserver"
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
-model Request {
-  id                   Int         @id @default(autoincrement())
-  title                String
-  description          String
-  status               String      @default("OPEN")
-  assignedTechnician   Technician? @relation("AssignedRequests", fields: [assignedTechnicianId], references: [id])
-  assignedTechnicianId Int?
-  createdAt            DateTime    @default(now())
-  updatedAt            DateTime    @updatedAt
-  technician           Technician? @relation("TechnicianRequests", fields: [technicianId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  technicianId         Int?
+enum Role {
+  USER
+  ADMIN
 }
 
-model Technician {
-  id                 Int       @id @default(autoincrement())
-  name               String
-  email              String    @unique
-  phone              String
-  requests           Request[] @relation("AssignedRequests")
-  createdAt          DateTime  @default(now())
-  updatedAt          DateTime  @updatedAt
-  technicianRequests Request[] @relation("TechnicianRequests")
+model User {
+  id        String    @id @default(uuid())
+  email     String    @unique
+  password  String
+  role      Role      @default(USER)
+  sessions  Session[]
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+}
+
+model Session {
+  id        String   @id @default(uuid())
+  jti       String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
 }

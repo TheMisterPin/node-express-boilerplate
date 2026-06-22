@@ -1,6 +1,6 @@
 # Node Express Boilerplate
 
-Basic Node.js API boilerplate with TypeScript, Express, Prisma, and SQL Server running in Docker.
+Basic Node.js API boilerplate with TypeScript, Express, `mssql`, Prisma migrations, and SQL Server running in Docker.
 
 ## Requirements
 
@@ -37,11 +37,11 @@ npm run prisma:studio    # open Prisma Studio
 ```bash
 curl http://localhost:3000/health
 
-curl -X POST http://localhost:3000/users \
+curl -X POST http://localhost:3000/technicians \
   -H "Content-Type: application/json" \
-  -d '{"email":"ada@example.com","name":"Ada Lovelace"}'
+  -d '{"name":"Ada Lovelace","email":"ada@example.com","phone":"555-0100"}'
 
-curl http://localhost:3000/users
+curl http://localhost:3000/technicians
 ```
 
 ## Database
@@ -52,8 +52,13 @@ The SQL Server container uses the `Developer` edition image:
 image: mcr.microsoft.com/mssql/server:2022-latest
 ```
 
-Prisma reads the connection string from `DATABASE_URL`. The default local value is:
+Prisma reads `DATABASE_URL` for migrations. The API uses the `DB_*` values through the `mssql` package. The default local values are:
 
 ```env
+DB_USER=sa
+DB_PASSWORD=YourStrong!Passw0rd
+DB_NAME=appdb
+DB_HOST=localhost
+DB_PORT=1433
 DATABASE_URL="sqlserver://localhost:1433;database=appdb;user=sa;password=YourStrong!Passw0rd;encrypt=true;trustServerCertificate=true"
 ```

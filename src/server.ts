@@ -1,14 +1,34 @@
 import { app } from "./app.js";
 import { env } from "./config/env.js";
-import { prisma } from "./prisma.js";
+import { connectToDatabase, disconnectFromDatabase } from "./lib/prisma.js";
+import { usersRouter } from "./routers/users-router.js";
+import type { Server } from "node:http";
 
-const server = app.listen(env.port, () => {
-  console.log(`API listening on http://localhost:${env.port}`);
+let server: Server | undefined;
+
+const start = async () => {
+  await connectToDatabase();
+
+  app.use("/users", usersRouter);
+
+  server = app.listen(env.port, () => {
+    console.log(`API listening on http://localhost:${env.port}`);
+  });
+};
+
+start().catch((error) => {
+  console.error("Failed to start API", error);
+  process.exit(1);
 });
 
 const shutdown = async () => {
+  if (!server) {
+    await disconnectFromDatabase();
+    process.exit(0);
+  }
+
   server.close(async () => {
-    await prisma.$disconnect();
+    await disconnectFromDatabase();
     process.exit(0);
   });
 };
