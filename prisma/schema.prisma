@@ -15,7 +15,16 @@ datasource db {
 
 enum Role {
   USER
+  TECHNICIAN
   ADMIN
+}
+
+enum TicketStatus {
+  NEW
+  ASSIGNED
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
 }
 
 model User {
@@ -26,6 +35,25 @@ model User {
   sessions  Session[]
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
+  tickets   Ticket[]
+  assignedTickets   Ticket[] @relation("Technician")
+}
+
+model Ticket {
+  id           String       @id @default(uuid())
+  title        String
+  description  String
+  status       TicketStatus @default(NEW)
+  submitterId  String
+  submitter    User         @relation(fields: [submitterId], references: [id], onDelete: Cascade)
+  technicianId String?
+  technician   User?        @relation("Technician", fields: [technicianId], references: [id], onDelete: SetNull)
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  @@index([submitterId])
+  @@index([technicianId])
+  @@index([status])
 }
 
 model Session {

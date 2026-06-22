@@ -3,6 +3,7 @@ import type { Server } from 'node:http'
 import { app } from './app'
 import { env } from './config/env'
 import { connectToDatabase, disconnectFromDatabase } from './lib/prisma'
+import { ticketsRouter } from './routers/tickets-router'
 import { usersRouter } from './routers/users-router'
 
 let server: Server | undefined
@@ -12,6 +13,7 @@ const start = async () =>
 	await connectToDatabase()
 
 	app.use('/users', usersRouter)
+	app.use('/tickets', ticketsRouter)
 
 	server = app.listen(env.port, () => 
 {
