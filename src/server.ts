@@ -1,46 +1,60 @@
 import type { Server } from 'node:http'
 
-import { app } from './app'
-import { env } from './config/env'
-import { connectToDatabase, disconnectFromDatabase } from './lib/prisma'
-import { ticketsRouter } from './routers/tickets-router'
-import { usersRouter } from './routers/users-router'
+import { createApp } from '@/app'
+import { env } from '@/config/env'
+import { logger } from '@/shared/lib/logger'
+import { disconnectPrisma } from '@/shared/lib/prisma'
+
+const app = createApp()
 
 let server: Server | undefined
 
-const start = async () => 
+const start = (): void => 
 {
-	await connectToDatabase()
-
-	app.use('/users', usersRouter)
-	app.use('/tickets', ticketsRouter)
-
-	server = app.listen(env.port, () => 
+  server = app.listen(env.PORT, () => 
 {
-		console.log(`API listening on http://localhost:${env.port}`)
-	})
+    logger.info(
+      { port: env.PORT, nodeEnv: env.NODE_ENV },
+      `API listening on http://localhost:${env.PORT}`,
+    )
+  })
 }
 
-start().catch((error) => 
-{
-	console.error('Failed to start API', error)
-	process.exit(1)
-})
+start()
 
-const shutdown = async () => 
+const shutdown = async (signal: string): Promise<void> => 
 {
-	if (!server) 
-{
-		await disconnectFromDatabase()
-		process.exit(0)
-	}
+  logger.info({ signal }, 'Shutting down gracefully')
 
-	server.close(async () => 
+  const closeServer = (): Promise<void> =>
+    new Promise((resolve, reject) => 
 {
-		await disconnectFromDatabase()
-		process.exit(0)
-	})
+      if (!server) 
+{
+        resolve()
+
+        return
+      }
+      server.close((err) => 
+{
+        if (err) reject(err)
+        else resolve()
+      })
+    })
+
+  try 
+{
+    await closeServer()
+    await disconnectPrisma()
+    logger.info('Shutdown complete')
+    process.exit(0)
+  }
+ catch (error) 
+{
+    logger.error({ error }, 'Error during shutdown')
+    process.exit(1)
+  }
 }
 
-process.on('SIGINT', shutdown)
-process.on('SIGTERM', shutdown)
+process.on('SIGTERM', () => void shutdown('SIGTERM'))
+process.on('SIGINT', () => void shutdown('SIGINT'))

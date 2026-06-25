@@ -1,48 +1,57 @@
+import authRouter from '@/features/auth/auth.routes'
+import categoriesRouter from '@/features/categories/categories.routes'
+import healthRouter from '@/features/health/health.routes'
+import organizationsRouter from '@/features/organizations/organizations.routes'
+import permissionsRouter from '@/features/permissions/permissions.routes'
+import productsRouter from '@/features/products/products.routes'
+import rolesRouter from '@/features/roles/roles.routes'
+import usersRouter from '@/features/users/users.routes'
+import { logger } from '@/shared/lib/logger'
+import { authLimiter, globalLimiter } from '@/shared/middleware/rateLimiter'
+import { errorHandler } from '@/shared/middleware/errorHandler'
+import { notFoundHandler } from '@/shared/middleware/notFound'
+import { requestId } from '@/shared/middleware/requestId'
 import cors from 'cors'
-import express from 'express'
+import express, { type Express, type Request, type Response, type NextFunction } from 'express'
 import helmet from 'helmet'
-import morgan from 'morgan'
 
-import { HttpError } from './errors/http-error'
+// WHY: Manual request logging avoids pino-http (not in allowed dependency list).
+function requestLogger(req: Request, res: Response, next: NextFunction): void {
+  const start = Date.now()
+  res.on('finish', () => {
+    logger.info({
+      requestId: req.id,
+      method: req.method,
+      path: req.path,
+      statusCode: res.statusCode,
+      responseTimeMs: Date.now() - start,
+      userId: req.user?.id,
+    })
+  })
+  next()
+}
 
-export const app = express()
+export function createApp(): Express {
+  const app = express()
 
-app.use(helmet())
-app.use(cors())
-app.use(express.json())
-app.use(morgan('dev'))
+  app.use(requestId)
+  app.use(helmet())
+  app.use(cors())
+  app.use(express.json())
+  app.use(globalLimiter)
+  app.use(requestLogger)
 
-app.get('/health', async (_req, res, next) => 
-{
-	try 
-{
-		res.json({ status: 'ok' })
-	}
- catch (error) 
-{
-		next(error)
-	}
-})
+  app.use('/health', healthRouter)
+  app.use('/auth', authLimiter, authRouter)
+  app.use('/users', usersRouter)
+  app.use('/organizations', organizationsRouter)
+  app.use('/roles', rolesRouter)
+  app.use('/permissions', permissionsRouter)
+  app.use('/products', productsRouter)
+  app.use('/categories', categoriesRouter)
 
-app.use(
-	(
-		error: unknown,
-		_req: express.Request,
-		res: express.Response,
-		_next: express.NextFunction,
-	) => 
-{
-		if (error instanceof HttpError) 
-{
-			res.status(error.statusCode).json({
-				error: error.message,
-				errorCode: error.errorCode,
-			})
+  app.use(notFoundHandler)
+  app.use(errorHandler)
 
-			return
-		}
-
-		console.error(error)
-		res.status(500).json({ error: 'Internal server error' })
-	},
-)
+  return app
+}

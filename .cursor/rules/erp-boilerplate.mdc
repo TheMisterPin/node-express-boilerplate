@@ -1,0 +1,470 @@
+---
+description: ERP backend boilerplate — single source of truth for architecture, patterns, and conventions
+alwaysApply: true
+---
+
+# ERP Boilerplate — Cursor Rules
+
+Node + Express + Prisma + PostgreSQL
+
+These rules are the single source of truth for every decision made in this codebase. Read them fully before generating or modifying any file.
+
+## 1. Prime Directive
+
+This is a production-grade ERP backend boilerplate.
+Every decision prioritises: correctness → security → readability → cleverness.
+Boring and deterministic is the feature. Do NOT be creative with architecture.
+When in doubt, follow the existing pattern exactly — this is a template others will clone, so consistency is more important than local optimisation.
+
+## 2. Language & Runtime
+
+- TypeScript strict mode only. No `any`. No `as unknown as X` casts.
+- Target: Node 20 LTS, ESNext modules compiled to CommonJS via tsc.
+- Use `tsx` for dev execution (`tsx watch src/server.ts`).
+- All files use `.ts` extension. No `.js` files in src/.
+- Enable: strict, noUncheckedIndexedAccess, exactOptionalPropertyTypes in tsconfig.
+- Imports: named imports preferred. No default exports except in `*.routes.ts` files.
+- Path aliases: `@/*` maps to `src/*`. Use them everywhere.
+
+## 3. Folder Architecture — Non-Negotiable
+
+```
+src/
+  app.ts                          ← Express app factory, middleware stack, route mounts
+  server.ts                       ← HTTP server bootstrap only (listen, signals)
+
+  features/
+    {feature}/
+      {feature}.routes.ts         ← Express Router, ONLY mounts handlers + middleware
+      {feature}.controller.ts     ← req/res boundary. Calls service. Returns envelope.
+      {feature}.service.ts        ← Business logic. No req/res. No Prisma directly.
+      {feature}.queries.ts        ← ALL Prisma calls live here and ONLY here.
+      {feature}.schema.ts         ← Zod schemas for request validation
+      {feature}.types.ts          ← Feature-local interfaces and type aliases
+      {feature}.middleware.ts     ← Feature-specific middleware (optional)
+
+  shared/
+    middleware/
+      authenticate.ts             ← JWT verification → attaches req.user
+      authorize.ts                ← RBAC check factory: authorize('resource', 'action')
+      validate.ts                 ← Zod schema validation middleware factory
+      rateLimiter.ts              ← express-rate-limit configurations
+      requestId.ts                ← attaches x-request-id to every request
+      errorHandler.ts             ← universal error handler (last middleware)
+      notFound.ts                 ← 404 catch-all
+
+    lib/
+      prisma.ts                   ← PrismaClient singleton
+      logger.ts                   ← Pino logger singleton
+      jwt.ts                      ← sign/verify token helpers
+      password.ts                 ← hash/compare helpers (bcryptjs)
+      response.ts                 ← sendSuccess / sendError envelope builders
+      paginate.ts                 ← offset pagination utility
+      audit.ts                    ← Prisma middleware for audit trail
+
+    types/
+      express.d.ts                ← Augment Express Request with req.user, req.id
+      common.ts                   ← Shared types: ApiResponse, PaginatedResult, etc.
+
+    constants/
+      roles.ts                    ← Role and Permission seed constants
+      errors.ts                   ← AppError class + HTTP error factories
+
+  config/
+    env.ts                        ← Zod-parsed, typed env (throws on startup if invalid)
+
+prisma/
+  schema.prisma
+  seed.ts
+  migrations/
+
+docker/
+  Dockerfile
+  docker-compose.yml
+  .dockerignore
+```
+
+**Rules:**
+
+- NEVER import Prisma client outside of `*.queries.ts` files.
+- NEVER put business logic in a controller.
+- NEVER put req/res types in a service.
+- NEVER create a file that doesn't fit this structure. Ask first.
+- NEVER create a `utils/` folder. Find the correct `shared/` location.
+- NEVER create a `helpers/` folder. Same reason.
+
+## 4. Naming Conventions
+
+| Kind | Convention | Example |
+|------|------------|---------|
+| Files | kebab-case (except feature files) | auth-token.ts, rate-limiter.ts |
+| Feature files | `{feature}.{layer}.ts` | users.routes.ts, users.service.ts |
+| Classes | PascalCase | AppError, TokenService |
+| Interfaces | PascalCase + I | IUser, ITokenPayload (types files only) |
+| Types | PascalCase | ApiResponse\<T\>, PaginatedResult\<T\> |
+| Functions | camelCase | findUserById, hashPassword |
+| Constants | SCREAMING_SNAKE | JWT_SECRET, DEFAULT_ROLE |
+| Zod schemas | camelCase + Schema | createUserSchema, loginSchema |
+| Route files | feature.routes.ts | users.routes.ts, auth.routes.ts |
+| Prisma models | PascalCase | User, Organization, AuditLog |
+| DB columns | camelCase (Prisma default) | |
+| ENV vars | SCREAMING_SNAKE | |
+
+## 5. API Response Envelope — Always Use This Shape
+
+Every single route response must use the envelope. Never call `res.json()` directly in a controller. Always use `sendSuccess()` or `sendError()` from `shared/lib/response.ts`.
+
+**Success:**
+
+```json
+{
+  "success": true,
+  "data": "<T>",
+  "meta": {
+    "page": 1,
+    "limit": 20,
+    "total": 100,
+    "totalPages": 5
+  }
+}
+```
+
+(`meta` omitted if not paginated)
+
+**Error:**
+
+```json
+{
+  "success": false,
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "Human message",
+    "details": []
+  }
+}
+```
+
+**HTTP status codes:**
+
+- 200 → GET success, UPDATE success
+- 201 → CREATE success
+- 204 → DELETE success (no body)
+- 400 → Validation error
+- 401 → Not authenticated
+- 403 → Not authorised (authenticated but forbidden)
+- 404 → Not found
+- 409 → Conflict (duplicate)
+- 422 → Unprocessable entity
+- 429 → Rate limited
+- 500 → Unhandled server error
+
+## 6. Error Handling
+
+- ALL errors flow through the universal `errorHandler` middleware. No exceptions.
+- Throw `AppError` instances from services and queries. Never throw raw Errors.
+- Never catch-and-swallow errors. Re-throw with context or let them bubble.
+- Never expose stack traces, Prisma internals, or SQL in responses.
+- Log the full error (including stack) in the error handler, not at throw site.
+- Prisma error codes (P2002, P2025, etc.) must be mapped to AppError in queries layer.
+
+**AppError signature:**
+
+```typescript
+new AppError(message: string, statusCode: number, code: string, details?: unknown)
+```
+
+**Common factory helpers in `shared/constants/errors.ts`:**
+
+- `notFound(resource: string)`
+- `unauthorized(message?)`
+- `forbidden(message?)`
+- `conflict(field: string)`
+- `validationError(details)`
+- `internal(message?)`
+
+## 7. Authentication & Sessions
+
+- Access token: JWT, short-lived (15m), signed with HS256, contains `{ sub, role, organizationId }`
+- Refresh token: opaque UUID, stored in DB (Session table), 7-day expiry
+- Refresh token rotation: each use issues a new token and invalidates the old one
+- Token blacklist: revoked JTIs stored in `Session.revokedAt` column
+- `authenticate` middleware: verifies access token → attaches `req.user = { id, role, organizationId }`
+- All protected routes MUST use `authenticate` middleware
+- Passwords: bcryptjs, saltRounds = 12
+- Never log tokens, passwords, or PII
+
+## 8. RBAC — Resource + Action Model
+
+Authorization is always: role → resource → action.
+Never hardcode role checks. Always use the `authorize()` middleware factory.
+
+**Actions (exhaustive list, use only these):**
+
+`'create' | 'read' | 'update' | 'delete' | 'export'`
+
+**Usage in routes:**
+
+```typescript
+router.get('/', authenticate, authorize('products', 'read'), controller.list)
+router.post('/', authenticate, authorize('products', 'create'), controller.create)
+```
+
+`authorize()` resolves permissions from DB at request time (cached per process).
+Permissions are seeded via `prisma/seed.ts`. Adding a new permission = new seed row, no code change.
+
+**Permission table structure:**
+
+`Permission { id, roleId, resource: string, action: Action }`
+
+**Built-in roles (seeded, not hardcoded):**
+
+- SUPER_ADMIN → all resources, all actions
+- ADMIN → all resources, all actions except system config
+- MANAGER → read/create/update on operational resources
+- EMPLOYEE → read-only on own-organization resources
+- VIEWER → read-only, global
+
+## 9. Prisma Rules
+
+- ONE PrismaClient instance. Singleton in `shared/lib/prisma.ts`. Import only in `*.queries.ts`.
+- Every model MUST have: id (cuid), createdAt, updatedAt, deletedAt (soft delete).
+- Soft delete: NEVER use `prisma.model.delete()`. Use `updateMany({ deletedAt: new Date() })`.
+- All queries MUST filter: `where: { deletedAt: null }` unless explicitly fetching deleted.
+- Optimistic locking: add `version Int @default(0)` to any model edited concurrently.
+- Audit middleware: attach in `shared/lib/audit.ts`, registered in `shared/lib/prisma.ts`.
+- Multi-tenancy: every non-auth model MUST have `organizationId` field.
+- Relations: always define both sides. Always name relation fields explicitly.
+- Never use `prisma.$queryRaw` unless absolutely unavoidable. Document why if used.
+- Migrations: NEVER edit migration files after they're created.
+- Select fields explicitly in queries. Never return full Prisma model to controller.
+
+**Schema conventions:**
+
+```prisma
+model User {
+  id             String    @id @default(cuid())
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  deletedAt      DateTime?
+  version        Int       @default(0)
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+}
+```
+
+## 10. Validation
+
+- Zod is the ONLY validation library. No express-validator. No joi.
+- Every route with a body, params, or query MUST use the `validate()` middleware.
+- Schemas live in `{feature}.schema.ts`. Export named: `createUserSchema`, `updateUserSchema`, etc.
+- `validate()` middleware factory signature: `validate(schema, target: 'body'|'params'|'query')`
+- Strip unknown fields: use `.strict()` on body schemas.
+- Never validate inside a controller or service. Validation happens at the route level.
+
+## 11. Logging
+
+- Pino for all logging. One singleton in `shared/lib/logger.ts`.
+- Log levels: error (5xx), warn (4xx, suspicious), info (lifecycle events), debug (dev only).
+- Every log entry MUST include: requestId, userId (if available), feature, action.
+- NEVER log: passwords, tokens, full request bodies containing PII, credit card data.
+- Request log format: `{ requestId, method, path, statusCode, responseTimeMs, userId? }`
+- Error log format: `{ requestId, error.message, error.stack, error.code, userId? }`
+- In production: JSON format. In development: pino-pretty.
+
+## 12. Environment & Config
+
+ALL environment variables are parsed and validated at startup in `config/env.ts` using Zod.
+If any required var is missing, the process exits with a descriptive error before binding.
+Never access `process.env` directly outside of `config/env.ts`.
+Import: `import { env } from '@/config/env'`
+
+**Required vars (documented in `.env.example`):**
+
+- DATABASE_URL
+- JWT_SECRET (min 32 chars)
+- JWT_REFRESH_SECRET (min 32 chars)
+- JWT_ACCESS_EXPIRES (e.g. "15m")
+- JWT_REFRESH_EXPIRES (e.g. "7d")
+- PORT (default 3000)
+- NODE_ENV (development | production | test)
+- BCRYPT_SALT_ROUNDS (default 12)
+- RATE_LIMIT_WINDOW_MS (default 900000)
+- RATE_LIMIT_MAX (default 100)
+- LOG_LEVEL (default "info")
+
+## 13. Rate Limiting
+
+Three separate rate limiters (configured in `shared/middleware/rateLimiter.ts`):
+
+- `globalLimiter` → all routes, 100 req/15min
+- `authLimiter` → /auth routes only, 10 req/15min (stricter)
+- `loginLimiter` → POST /auth/login only, 5 req/15min (strictest)
+
+**Per-user login lockout (not rate-limit based):**
+
+- Track failed login attempts in User model: `failedLoginAttempts`, `lockedUntil`
+- Lock for 15 minutes after 5 consecutive failures.
+- Reset counter on successful login.
+
+## 14. Controller Pattern — Copy This Exactly
+
+```typescript
+// users.controller.ts
+import { RequestHandler } from 'express'
+import { sendSuccess } from '@/shared/lib/response'
+import * as usersService from './users.service'
+
+export const list: RequestHandler = async (req, res, next) => {
+  try {
+    const result = await usersService.listUsers(req.query, req.user!)
+    sendSuccess(res, result.data, 200, result.meta)
+  } catch (error) {
+    next(error)  // ← ALWAYS pass to next(). Never handle in controller.
+  }
+}
+
+export const create: RequestHandler = async (req, res, next) => {
+  try {
+    const user = await usersService.createUser(req.body, req.user!)
+    sendSuccess(res, user, 201)
+  } catch (error) {
+    next(error)
+  }
+}
+```
+
+## 15. Service Pattern
+
+```typescript
+// users.service.ts
+// - No imports from express. No req, res, next.
+// - Receives plain typed params, returns plain typed values.
+// - Calls queries. Contains all business logic.
+// - Throws AppError for expected failures.
+
+import * as usersQueries from './users.queries'
+import { notFound, conflict } from '@/shared/constants/errors'
+import type { ITokenUser } from '@/shared/types/common'
+
+export async function createUser(dto: CreateUserDto, actor: ITokenUser) {
+  const existing = await usersQueries.findByEmail(dto.email)
+  if (existing) throw conflict('email')
+  return usersQueries.createUser(dto)
+}
+```
+
+## 16. Routes Pattern — Copy This Exactly
+
+```typescript
+// users.routes.ts
+import { Router } from 'express'
+import { authenticate } from '@/shared/middleware/authenticate'
+import { authorize } from '@/shared/middleware/authorize'
+import { validate } from '@/shared/middleware/validate'
+import { createUserSchema, updateUserSchema } from './users.schema'
+import * as controller from './users.controller'
+
+const router = Router()
+
+router.get('/',
+  authenticate,
+  authorize('users', 'read'),
+  controller.list
+)
+
+router.get('/:id',
+  authenticate,
+  authorize('users', 'read'),
+  controller.getById
+)
+
+router.post('/',
+  authenticate,
+  authorize('users', 'create'),
+  validate(createUserSchema, 'body'),
+  controller.create
+)
+
+router.patch('/:id',
+  authenticate,
+  authorize('users', 'update'),
+  validate(updateUserSchema, 'body'),
+  controller.update
+)
+
+router.delete('/:id',
+  authenticate,
+  authorize('users', 'delete'),
+  controller.remove
+)
+
+export default router
+```
+
+## 17. What Never To Do
+
+NEVER:
+
+- Use `any` type
+- Import PrismaClient outside `*.queries.ts`
+- Call `res.json()` directly in a controller
+- Catch and swallow errors silently
+- Put business logic in a route handler
+- Put Prisma calls in a controller or service
+- Hardcode roles or permissions in code
+- Use `.delete()` in Prisma (soft-delete only)
+- Forget `deletedAt: null` in where clauses
+- Forget `organizationId` on non-auth models
+- Use `console.log` (use logger)
+- Create a catch-all `/api/...` route
+- Merge routes from different features into one file
+- Skip the `validate()` middleware on any mutating route
+- Expose internal error details to the client
+- Create any folder not defined in section 3
+- Skip the response envelope
+- Return Prisma model objects directly (select fields explicitly)
+
+## 18. Dependency Rules
+
+**Allowed production dependencies (no others without explicit user approval):**
+
+- express → HTTP framework
+- @prisma/client → ORM
+- zod → validation
+- bcryptjs → password hashing
+- jsonwebtoken → JWT
+- helmet → security headers
+- cors → CORS
+- express-rate-limit → rate limiting
+- pino → logging
+- pino-pretty → dev log formatting
+- uuid → UUIDs for request IDs, refresh tokens
+- dotenv → env loading in dev
+
+**Allowed dev dependencies:**
+
+- prisma, typescript, tsx
+- @types/express, @types/bcryptjs, @types/jsonwebtoken, @types/node, @types/cors, @types/uuid
+
+**Do NOT add:** lodash, moment, dayjs, axios, class-validator, class-transformer, typeorm, sequelize, mongoose, passport, express-jwt, or any test framework.
+
+## 19. Git & Template Hygiene
+
+- `.env` is always gitignored. `.env.example` is always committed.
+- `.gitignore` must cover: node_modules, dist, .env, *.log, .DS_Store
+- Every TODO in comments is formatted: `// TODO(template): description`
+- `prisma/seed.ts` must be idempotent (upsert, not insert)
+- README.md must contain: quickstart, env var table, seed instructions, architecture explanation, how to add a new feature slice
+- CLAUDE.md or AGENTS.md must contain these rules in summary form for any AI agent working on derivative projects
+
+## 20. Scope Guard
+
+This is a BOILERPLATE / TEMPLATE. It demonstrates patterns, not business logic.
+When generating example features (products, inventory, etc.):
+
+- Keep data models realistic but minimal
+- Comment every non-obvious decision with `// WHY: explanation`
+- Mark extension points with `// TODO(template): add your X logic here`
+- Do not implement real business rules — implement the SHAPE of business rules
+
+The goal: a developer clones this, reads the code for 30 minutes, and knows exactly how to add any new feature without asking anyone.
